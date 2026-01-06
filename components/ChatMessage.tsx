@@ -8,7 +8,21 @@ interface ChatMessageProps {
   content: string;
 }
 
+/**
+ * Strip internal rating markers from displayed content
+ */
+function cleanContent(content: string): string {
+  return content
+    // Remove the entire ratings code block
+    .replace(/```\s*\n(?:RATING_\w+:.*\n)+```/gi, '')
+    // Remove individual rating lines
+    .replace(/RATING_(?:OVERALL|VISUAL_DESIGN|HIERARCHY|ACCESSIBILITY|INTERACTION|UX):\s*(?:Strong|Good|Fair|Needs Work)/gi, '')
+    .trim();
+}
+
 export default function ChatMessage({ role, content }: ChatMessageProps) {
+  const displayContent = role === 'assistant' ? cleanContent(content) : content;
+  
   if (role === 'user') {
     return (
       <div className="flex justify-end animate-fade-in">
@@ -73,7 +87,7 @@ export default function ChatMessage({ role, content }: ChatMessageProps) {
               ),
             }}
           >
-            {content}
+            {displayContent}
           </ReactMarkdown>
         </div>
       </div>

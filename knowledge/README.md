@@ -1,53 +1,80 @@
-# README
+Welcome to our design system documentation! Below you will find the entire content of the documentation separated by the main categories. Use this page to navigate and find what you are looking for!
 
-## Knowledge Directory
-
-This directory contains markdown files that provide context to the AI when analyzing designs.
-
-### How it Works
-
-1. All `.md` files in this directory (and subdirectories) are automatically loaded
-2. The content is included in Claude's system prompt
-3. Claude uses this knowledge to provide more specific, informed feedback
-
-### What to Include
-
-Good examples of knowledge files:
-- Design principles and guidelines
-- Brand-specific design standards
-- Typography rules
-- Color palette guidelines
-- Accessibility requirements
-- Component usage guidelines
-- Interaction patterns
-
-### File Organization
-
-You can organize files however you like:
-- Flat structure: All files in `/knowledge/`
-- Nested: Create subdirectories like `/knowledge/components/`, `/knowledge/branding/`
-- All markdown files will be discovered and loaded
-
-### Tips
-
-- Keep files focused on specific topics
-- Use clear, descriptive filenames
-- Write in markdown format
-- Be specific and actionable
-- Update as your design system evolves
-
-### Example Structure
-
-```
-knowledge/
-├── design-principles.md
-├── typography.md
-├── color-contrast.md
-├── components/
-│   ├── buttons.md
-│   └── forms.md
-└── brand/
-    ├── voice-tone.md
-    └── visual-identity.md
-```
+### PDL
+- [Product design language](./pdl/product-design-language.md)
+- [Product design language principles](./pdl/guiding-principles.md)
+- [Foundations](./pdl/foundations/colors.md)
+  - [Colors](./pdl/foundations/colors.md)
+  - [Elevation (shadows)](./pdl/foundations/elevation-shadows.md)
+  - [Iconography](./pdl/foundations/iconography.md)
+  - [Page layout](./pdl/foundations/page-layout.md)
+  - [Shapes (border-radius)](./pdl/foundations/shapes-border-radius-d2xg4pyh.md)
+  - [Spacing & Sizing systems](./pdl/foundations/spacing-and-sizing-systems-RkXggTuU.md)
+  - [Typography](./pdl/foundations/typography.md)
+  - [Common issues](./pdl/foundations/common-issues.md)
+- [Patterns](./pdl/patterns/empty-state.md)
+  - [_Empty state](./pdl/patterns/empty-state.md)
+  - [_Focus state](./pdl/patterns/focus-state.md)
+  - [Branded AI](./pdl/patterns/branded-ai-aEun7LY1.md)
+  - [View-only guidelines](./pdl/patterns/view-only-guidelines/list-views.md)
+    - [List Views](./pdl/patterns/view-only-guidelines/list-views.md)
+    - [Detail Views](./pdl/patterns/view-only-guidelines/detail-views-16fbIk3Q.md)
+- [Design Tokens](./pdl/design-tokens/overview.md)
+  - [Overview](./pdl/design-tokens/overview.md)
+  - [Colors](./pdl/design-tokens/colors.md)
+  - [Typography](./pdl/design-tokens/typography.md)
+  - [Size & Spacing](./pdl/design-tokens/size-and-spacing.md)
+  - [Borders](./pdl/design-tokens/borders-1Q5oHMTk.md)
+  - [Drop shadows](./pdl/design-tokens/drop-shadows-Y6VSpkH1.md)
+### Content Design
+- [Choosing tone](./content-design/choosing-tone.md)
+- [Naming strategy](./content-design/naming-strategy.md)
+- [Accessibility](./content-design/accessibility.md)
+- [Fundamentals](./content-design/fundamentals/content-principles.md)
+  - [Content principles](./content-design/fundamentals/content-principles.md)
+  - [Reading level](./content-design/fundamentals/reading-level.md)
+  - [Active voice](./content-design/fundamentals/active-voice.md)
+  - [Emojis 🤩](./content-design/fundamentals/emojis.md)
+- [Grammar](./content-design/grammar/casing-and-capitalization.md)
+  - [Casing & capitalization](./content-design/grammar/casing-and-capitalization.md)
+  - [Contractions](./content-design/grammar/contractions.md)
+  - [Punctuation](./content-design/grammar/punctuation.md)
+  - [Pronouns](./content-design/grammar/pronouns-vcA88xN9.md)
+  - [_Links](./content-design/grammar/links-usZn6D3o.md)
+  - [Numbers](./content-design/grammar/numbers-bpAWQfzn.md)
+- [Interface content elements](./content-design/interface-content-elements/interface-elements.md)
+  - [Interface elements](./content-design/interface-content-elements/interface-elements.md)
+  - [Error messages](./content-design/interface-content-elements/error-messages.md)
+  - [Empty states](./content-design/interface-content-elements/empty-states.md)
+  - [Input fields](./content-design/interface-content-elements/input-fields.md)
+  - [Placeholder text](./content-design/interface-content-elements/placeholder-text.md)
+  - [Transition text](./content-design/interface-content-elements/transition-text.md)
+  - [Confirmation messages](./content-design/interface-content-elements/confirmation-messages.md)
+  - [Notifications](./content-design/interface-content-elements/notifications.md)
+  - [Dates & times](./content-design/interface-content-elements/dates-and-times.md)
+  - [Headings](./content-design/interface-content-elements/headings-RrKd8vTU.md)
+- [AI content strategy](./content-design/ai-content-strategy/copilot-s-voice-and-tone.md)
+  - [Copilot's voice and tone](./content-design/ai-content-strategy/copilot-s-voice-and-tone.md)
+  - [Guidance for developers](./content-design/ai-content-strategy/guidance-for-developers.md)
+- [Glossary of terms](./content-design/glossary-of-terms/a.md)
+  - [A](./content-design/glossary-of-terms/a.md)
+  - [B](./content-design/glossary-of-terms/b.md)
+  - [C](./content-design/glossary-of-terms/c-nVgZ1khx.md)
+  - [D](./content-design/glossary-of-terms/d.md)
+  - [E](./content-design/glossary-of-terms/e.md)
+  - [F](./content-design/glossary-of-terms/f.md)
+  - [G](./content-design/glossary-of-terms/g.md)
+  - [H](./content-design/glossary-of-terms/h.md)
+  - [I](./content-design/glossary-of-terms/i.md)
+  - [L](./content-design/glossary-of-terms/l.md)
+  - [M](./content-design/glossary-of-terms/m.md)
+  - [O](./content-design/glossary-of-terms/o.md)
+  - [P](./content-design/glossary-of-terms/p.md)
+  - [R](./content-design/glossary-of-terms/r.md)
+  - [S](./content-design/glossary-of-terms/s.md)
+  - [T](./content-design/glossary-of-terms/t.md)
+  - [U](./content-design/glossary-of-terms/u.md)
+  - [V](./content-design/glossary-of-terms/v.md)
+  - [W](./content-design/glossary-of-terms/w.md)
+  - [Z](./content-design/glossary-of-terms/z.md)
 

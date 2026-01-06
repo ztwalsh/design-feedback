@@ -8,44 +8,95 @@ export interface KnowledgeFile {
 }
 
 /**
- * Recursively read all markdown files from the knowledge directory
+ * Priority knowledge files to load (most important for design feedback)
+ * Add paths relative to /knowledge directory
+ */
+const PRIORITY_FILES = [
+  // Core content design principles
+  'content-design/fundamentals/content-principles.md',
+  'content-design/accessibility.md',
+  'content-design/choosing-tone.md',
+  // Key interface guidelines
+  'content-design/interface-content-elements/error-messages.md',
+  'content-design/interface-content-elements/empty-states.md',
+  // Grammar essentials
+  'content-design/grammar/casing-and-capitalization.md',
+];
+
+/**
+ * Max total characters to load (to keep context reasonable)
+ */
+const MAX_TOTAL_CHARS = 15000;
+
+/**
+ * Load only essential knowledge files to keep context efficient
  */
 export function loadKnowledge(): KnowledgeFile[] {
   const knowledgeDir = path.join(process.cwd(), 'knowledge');
   const files: KnowledgeFile[] = [];
+  let totalChars = 0;
 
   if (!fs.existsSync(knowledgeDir)) {
     console.warn('⚠️ Knowledge directory not found');
     return files;
   }
 
-  function readDirectory(dir: string, relativePath: string = '') {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relPath = path.join(relativePath, entry.name);
-
-      if (entry.isDirectory()) {
-        readDirectory(fullPath, relPath);
-      } else if (entry.isFile() && entry.name.endsWith('.md')) {
-        try {
-          const content = fs.readFileSync(fullPath, 'utf8');
-          files.push({
-            filename: entry.name,
-            content,
-            path: relPath,
-          });
-          console.log(`📄 Loaded: ${relPath}`);
-        } catch (error) {
-          console.error(`❌ Error reading ${fullPath}:`, error);
+  // First, load priority files
+  for (const relativePath of PRIORITY_FILES) {
+    const fullPath = path.join(knowledgeDir, relativePath);
+    
+    if (fs.existsSync(fullPath)) {
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        
+        // Check if we'd exceed the limit
+        if (totalChars + content.length > MAX_TOTAL_CHARS) {
+          console.log(`⏹️ Stopping at ${files.length} files (char limit)`);
+          break;
         }
+        
+        files.push({
+          filename: path.basename(relativePath),
+          content,
+          path: relativePath,
+        });
+        totalChars += content.length;
+        console.log(`📄 Loaded: ${relativePath}`);
+      } catch (error) {
+        console.error(`❌ Error reading ${fullPath}:`, error);
       }
     }
   }
 
-  readDirectory(knowledgeDir);
-  console.log(`✅ Loaded ${files.length} knowledge file(s)`);
+  // Also load any .md files in the root knowledge directory
+  const rootEntries = fs.readdirSync(knowledgeDir, { withFileTypes: true });
+  for (const entry of rootEntries) {
+    if (entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'README.md') {
+      const fullPath = path.join(knowledgeDir, entry.name);
+      try {
+        const content = fs.readFileSync(fullPath, 'utf8');
+        
+        if (totalChars + content.length > MAX_TOTAL_CHARS) {
+          break;
+        }
+        
+        // Skip if already loaded via priority
+        if (!files.some(f => f.path === entry.name)) {
+          files.push({
+            filename: entry.name,
+            content,
+            path: entry.name,
+          });
+          totalChars += content.length;
+          console.log(`📄 Loaded (root): ${entry.name}`);
+        }
+      } catch (error) {
+        console.error(`❌ Error reading ${fullPath}:`, error);
+      }
+    }
+  }
+
+  console.log(`✅ Loaded ${files.length} knowledge file(s) (~${Math.round(totalChars/1000)}k chars)`);
   return files;
 }
 
@@ -57,13 +108,13 @@ export function formatKnowledgeForPrompt(knowledgeFiles: KnowledgeFile[]): strin
     return '';
   }
 
-  let formatted = '\n\n# Knowledge Base\n\n';
-  formatted += 'Use the following guidelines and principles when analyzing designs:\n\n';
+  let formatted = '\n\n---\n## Reference Guidelines\n';
 
   for (const file of knowledgeFiles) {
-    formatted += `## ${file.filename.replace('.md', '')}\n\n`;
-    formatted += file.content;
-    formatted += '\n\n---\n\n';
+    const title = file.filename.replace('.md', '').replace(/-/g, ' ');
+    formatted += `\n### ${title}\n`;
+    formatted += file.content.trim();
+    formatted += '\n';
   }
 
   return formatted;

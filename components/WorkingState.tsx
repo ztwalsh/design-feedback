@@ -11,9 +11,15 @@ interface Message {
   content: string;
 }
 
+type Rating = 'Good' | 'Strong' | 'Fair' | 'Needs Work' | null;
+
 interface Assessment {
-  overall: 'Good' | 'Strong' | 'Fair' | 'Needs Work' | null;
-  accessibility: 'Good' | 'Strong' | 'Fair' | 'Needs Work' | null;
+  overall: Rating;
+  visualDesign: Rating;
+  hierarchy: Rating;
+  accessibility: Rating;
+  interaction: Rating;
+  ux: Rating;
 }
 
 interface WorkingStateProps {
@@ -36,96 +42,128 @@ export default function WorkingState({
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [assessment, setAssessment] = useState<Assessment>({
     overall: null,
+    visualDesign: null,
+    hierarchy: null,
     accessibility: null,
+    interaction: null,
+    ux: null,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const imageBase64Ref = useRef<string>('');
-  const fullImageUrlRef = useRef<string>('');
+  const hasStartedAnalysis = useRef(false);
+  const imageDataRef = useRef<{ base64: string; fullUrl: string }>({ base64: '', fullUrl: '' });
 
-  // Extract base64 from data URL
+  // Single effect: extract base64 and perform initial analysis
   useEffect(() => {
-    if (imageUrl) {
-      fullImageUrlRef.current = imageUrl;
-      imageBase64Ref.current = imageUrl.split(',')[1];
+    if (!isInitialAnalysis || hasStartedAnalysis.current || !imageUrl) {
+      return;
     }
-  }, [imageUrl]);
-
-  // Perform initial analysis when component mounts
-  useEffect(() => {
-    if (isInitialAnalysis && imageBase64Ref.current) {
-      performInitialAnalysis();
-    }
-  }, [isInitialAnalysis]);
+    
+    // Mark as started to prevent double-runs
+    hasStartedAnalysis.current = true;
+    
+    // Extract and store base64 synchronously
+    const base64Data = imageUrl.split(',')[1];
+    imageDataRef.current = { base64: base64Data, fullUrl: imageUrl };
+    
+    // Start analysis
+    performInitialAnalysis(base64Data, imageUrl);
+  }, [isInitialAnalysis, imageUrl]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Extract assessment from feedback text
+  // Extract assessment from feedback text using explicit rating markers
   const extractAssessment = (feedback: string): Assessment => {
-    const lowerFeedback = feedback.toLowerCase();
+    const validRatings = ['Strong', 'Good', 'Fair', 'Needs Work'] as const;
     
-    let overall: Assessment['overall'] = 'Strong';
-    let accessibility: Assessment['accessibility'] = 'Good';
+    const parseRating = (key: string): Rating => {
+      const regex = new RegExp(`RATING_${key}:\\s*(Strong|Good|Fair|Needs Work)`, 'i');
+      const match = feedback.match(regex);
+      if (match) {
+        return validRatings.find(r => r.toLowerCase() === match[1].toLowerCase()) || null;
+      }
+      return null;
+    };
     
-    // Simple heuristic - look for keywords
-    if (lowerFeedback.includes('excellent') || lowerFeedback.includes('outstanding')) {
-      overall = 'Strong';
-    } else if (lowerFeedback.includes('good') || lowerFeedback.includes('solid')) {
-      overall = 'Good';
-    } else if (lowerFeedback.includes('fair') || lowerFeedback.includes('adequate')) {
-      overall = 'Fair';
-    } else if (lowerFeedback.includes('poor') || lowerFeedback.includes('needs work')) {
-      overall = 'Needs Work';
-    }
-    
-    if (lowerFeedback.includes('accessible') || lowerFeedback.includes('accessibility')) {
-      accessibility = 'Good';
-    }
-    
-    return { overall, accessibility };
+    return {
+      overall: parseRating('OVERALL'),
+      visualDesign: parseRating('VISUAL_DESIGN'),
+      hierarchy: parseRating('HIERARCHY'),
+      accessibility: parseRating('ACCESSIBILITY'),
+      interaction: parseRating('INTERACTION'),
+      ux: parseRating('UX'),
+    };
   };
 
-  const performInitialAnalysis = async () => {
+  // Deep dive prompts for each category
+  const categoryPrompts: Record<string, string> = {
+    visual: "Give me a detailed deep-dive on the **Visual Design** of this screenshot. Focus on: color choices and palette harmony, typography selection and hierarchy, spacing and whitespace usage, imagery and iconography, overall aesthetic coherence and brand consistency. What's working well and what specific improvements would elevate the visual design?",
+    hierarchy: "Give me a detailed deep-dive on the **Information Hierarchy** of this screenshot. Focus on: content organization and structure, visual weight distribution, F-pattern or Z-pattern scanning flow, how the design guides user attention, clarity of primary vs secondary content. What's working well and what could be reorganized for better scannability?",
+    accessibility: "Give me a detailed deep-dive on the **Accessibility** of this screenshot. Focus on: color contrast ratios, text legibility and sizing, touch/click target sizes, keyboard navigation considerations, screen reader compatibility concerns, cognitive load and clarity. What accessibility issues do you see and how should they be fixed?",
+    interaction: "Give me a detailed deep-dive on the **Interaction Design** of this screenshot. Focus on: clarity of interactive elements, button and link affordances, hover/focus state expectations, feedback mechanisms, form design if applicable, call-to-action effectiveness. What's working well and what could be clearer for users?",
+    ux: "Give me a detailed deep-dive on the **UX Efficacy** of this screenshot. Focus on: user flow clarity, cognitive load and mental effort required, task completion paths, error prevention, user confidence and trust signals, overall usability. What friction points exist and how could the experience be smoother?",
+  };
+
+  const handleCategoryDeepDive = async (category: string, label: string) => {
+    if (isLoading || !categoryPrompts[category]) return;
+    
+    const prompt = categoryPrompts[category];
+    
+    // Add the question to messages
+    setMessages((prev) => [...prev, { role: 'user', content: `Deep dive: ${label}` }]);
+    setIsLoading(true);
+    
+    try {
+      const response = await askFollowUpQuestion(
+        imageDataRef.current.base64,
+        imageDataRef.current.fullUrl,
+        messages,
+        prompt
+      );
+      
+      setMessages((prev) => [...prev, { role: 'assistant', content: response }]);
+    } catch (error) {
+      console.error('Error getting deep dive:', error);
+      setMessages((prev) => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, there was an error getting the detailed analysis. Please try again.' 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const performInitialAnalysis = async (base64Data: string, fullDataUrl: string) => {
     setIsLoading(true);
     setIsAnalyzingInitial(true);
     
-    console.log('🚀 Starting analysis...');
-    console.log('   Image URL length:', imageUrl?.length);
-    console.log('   Base64 length:', imageBase64Ref.current?.length);
-    console.log('   Full URL preview:', fullImageUrlRef.current?.substring(0, 50));
-    
     try {
-      console.log('📤 Calling analyzeDesign...');
-      const feedback = await analyzeDesign(imageBase64Ref.current, fullImageUrlRef.current);
-      
-      console.log('✅ Got response:', feedback.substring(0, 100));
+      const feedback = await analyzeDesign(base64Data, fullDataUrl);
       
       // Extract assessment ratings
       const ratings = extractAssessment(feedback);
+      
+      // Set ALL state before notifying parent - this ensures atomic update
       setAssessment(ratings);
+      setMessages([{ role: 'assistant', content: feedback }]);
+      setIsAnalyzingInitial(false);
+      setIsLoading(false);
       
-      setMessages([
-        {
-          role: 'assistant',
-          content: feedback,
-        },
-      ]);
-      
+      // Only notify parent AFTER all local state is set
       onAnalysisComplete();
     } catch (error) {
       console.error('❌ Error in performInitialAnalysis:', error);
       setMessages([
         {
           role: 'assistant',
-          content: `Error details: ${error instanceof Error ? error.message : String(error)}\n\nPlease check the browser console for more information.`,
+          content: `Error: ${error instanceof Error ? error.message : String(error)}`,
         },
       ]);
-      onAnalysisComplete();
-    } finally {
+      setIsAnalyzingInitial(false);
       setIsLoading(false);
-      setIsAnalyzingInitial(false); // Initial analysis complete
+      onAnalysisComplete();
     }
   };
 
@@ -144,8 +182,8 @@ export default function WorkingState({
 
     try {
       const response = await askFollowUpQuestion(
-        imageBase64Ref.current,
-        fullImageUrlRef.current,
+        imageDataRef.current.base64,
+        imageDataRef.current.fullUrl,
         messages,
         question
       );
@@ -237,20 +275,60 @@ export default function WorkingState({
           </div>
         </div>
 
-        {/* Assessment Cards - Swapped order */}
-        <div className="grid grid-cols-2 gap-4 flex-shrink-0">
+        {/* Assessment Cards Grid */}
+        <div className="flex flex-col gap-3 flex-shrink-0">
+          {/* Overall - Full width, larger */}
           <AssessmentCard 
             label="Overall" 
             rating={assessment.overall} 
             type="overall"
             isLoading={isAnalyzingInitial}
+            isLarge
           />
-          <AssessmentCard 
-            label="Accessibility" 
-            rating={assessment.accessibility} 
-            type="accessibility"
-            isLoading={isAnalyzingInitial}
-          />
+          
+          {/* Sub-categories - 3 column grid, clickable for deep dive */}
+          <div className="grid grid-cols-3 gap-3">
+            <AssessmentCard 
+              label="Visual Design" 
+              rating={assessment.visualDesign} 
+              type="visual"
+              isLoading={isAnalyzingInitial}
+              isClickable={!isAnalyzingInitial && !isLoading}
+              onClick={() => handleCategoryDeepDive('visual', 'Visual Design')}
+            />
+            <AssessmentCard 
+              label="Hierarchy" 
+              rating={assessment.hierarchy} 
+              type="hierarchy"
+              isLoading={isAnalyzingInitial}
+              isClickable={!isAnalyzingInitial && !isLoading}
+              onClick={() => handleCategoryDeepDive('hierarchy', 'Information Hierarchy')}
+            />
+            <AssessmentCard 
+              label="Accessibility" 
+              rating={assessment.accessibility} 
+              type="accessibility"
+              isLoading={isAnalyzingInitial}
+              isClickable={!isAnalyzingInitial && !isLoading}
+              onClick={() => handleCategoryDeepDive('accessibility', 'Accessibility')}
+            />
+            <AssessmentCard 
+              label="Interaction" 
+              rating={assessment.interaction} 
+              type="interaction"
+              isLoading={isAnalyzingInitial}
+              isClickable={!isAnalyzingInitial && !isLoading}
+              onClick={() => handleCategoryDeepDive('interaction', 'Interaction Design')}
+            />
+            <AssessmentCard 
+              label="UX Efficacy" 
+              rating={assessment.ux} 
+              type="ux"
+              isLoading={isAnalyzingInitial}
+              isClickable={!isAnalyzingInitial && !isLoading}
+              onClick={() => handleCategoryDeepDive('ux', 'UX Efficacy')}
+            />
+          </div>
         </div>
 
         {/* Footer Text */}
