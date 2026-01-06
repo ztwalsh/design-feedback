@@ -24,7 +24,7 @@ interface Assessment {
 }
 
 interface WorkingStateProps {
-  imageUrl: string;
+  images: string[];
   context?: string;
   isInitialAnalysis: boolean;
   onAnalysisComplete: () => void;
@@ -32,7 +32,7 @@ interface WorkingStateProps {
 }
 
 export default function WorkingState({
-  imageUrl,
+  images: initialImages,
   context,
   isInitialAnalysis,
   onAnalysisComplete,
@@ -41,8 +41,10 @@ export default function WorkingState({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isAnalyzingInitial, setIsAnalyzingInitial] = useState(true); // Separate state for initial analysis
-  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isAnalyzingInitial, setIsAnalyzingInitial] = useState(true);
+  const [modalImageIndex, setModalImageIndex] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [allImages, setAllImages] = useState<string[]>(initialImages);
   const [assessment, setAssessment] = useState<Assessment>({
     overall: null,
     visualDesign: null,
@@ -54,24 +56,30 @@ export default function WorkingState({
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStartedAnalysis = useRef(false);
-  const imageDataRef = useRef<{ base64: string; fullUrl: string }>({ base64: '', fullUrl: '' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Store processed image data for API calls
+  const imageDataRef = useRef<Array<{ base64: string; fullUrl: string }>>([]);
 
   // Single effect: extract base64 and perform initial analysis
   useEffect(() => {
-    if (!isInitialAnalysis || hasStartedAnalysis.current || !imageUrl) {
+    if (!isInitialAnalysis || hasStartedAnalysis.current || allImages.length === 0) {
       return;
     }
     
     // Mark as started to prevent double-runs
     hasStartedAnalysis.current = true;
     
-    // Extract and store base64 synchronously
-    const base64Data = imageUrl.split(',')[1];
-    imageDataRef.current = { base64: base64Data, fullUrl: imageUrl };
+    // Extract and store base64 for all images
+    const imageData = allImages.map(img => ({
+      base64: img.split(',')[1],
+      fullUrl: img,
+    }));
+    imageDataRef.current = imageData;
     
-    // Start analysis with optional context
-    performInitialAnalysis(base64Data, imageUrl, context);
-  }, [isInitialAnalysis, imageUrl, context]);
+    // Start analysis with all images
+    performInitialAnalysis(imageData, context);
+  }, [isInitialAnalysis, allImages, context]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -122,9 +130,11 @@ export default function WorkingState({
     setIsLoading(true);
     
     try {
+      // Use first image for follow-ups (or could use all)
+      const primaryImage = imageDataRef.current[0];
       const response = await askFollowUpQuestion(
-        imageDataRef.current.base64,
-        imageDataRef.current.fullUrl,
+        primaryImage.base64,
+        primaryImage.fullUrl,
         messages,
         prompt
       );
@@ -140,8 +150,34 @@ export default function WorkingState({
       setIsLoading(false);
     }
   };
+  
+  // Handle adding new images during conversation
+  const handleAddImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const newImageData = {
+          base64: dataUrl.split(',')[1],
+          fullUrl: dataUrl,
+        };
+        
+        setAllImages((prev) => [...prev, dataUrl]);
+        imageDataRef.current = [...imageDataRef.current, newImageData];
+      };
+      reader.readAsDataURL(file);
+    });
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
-  const performInitialAnalysis = async (base64Data: string, fullDataUrl: string, userContext?: string) => {
+  const performInitialAnalysis = async (imageData: Array<{ base64: string; fullUrl: string }>, userContext?: string) => {
     setIsLoading(true);
     setIsAnalyzingInitial(true);
     
@@ -153,8 +189,7 @@ export default function WorkingState({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: base64Data,
-          fullDataUrl: fullDataUrl,
+          images: imageData,
           userContext: userContext,
         }),
       });
@@ -238,9 +273,11 @@ export default function WorkingState({
     setIsLoading(true);
 
     try {
+      // Use first image for follow-ups
+      const primaryImage = imageDataRef.current[0];
       const response = await askFollowUpQuestion(
-        imageDataRef.current.base64,
-        imageDataRef.current.fullUrl,
+        primaryImage.base64,
+        primaryImage.fullUrl,
         messages,
         question
       );
@@ -275,14 +312,14 @@ export default function WorkingState({
   return (
     <div className="h-screen bg-[#1a1a1a] flex overflow-hidden">
       {/* Image Modal */}
-      {isImageModalOpen && (
+      {modalImageIndex !== null && (
         <div 
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-8 animate-fade-in"
-          onClick={() => setIsImageModalOpen(false)}
+          onClick={() => setModalImageIndex(null)}
         >
           {/* Close button */}
           <button
-            onClick={() => setIsImageModalOpen(false)}
+            onClick={() => setModalImageIndex(null)}
             className="absolute top-6 right-6 w-10 h-10 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors duration-200"
             aria-label="Close modal"
           >
@@ -291,45 +328,108 @@ export default function WorkingState({
             </svg>
           </button>
           
+          {/* Navigation arrows for multiple images */}
+          {allImages.length > 1 && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); setModalImageIndex((modalImageIndex - 1 + allImages.length) % allImages.length); }}
+                className="absolute left-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors duration-200"
+              >
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setModalImageIndex((modalImageIndex + 1) % allImages.length); }}
+                className="absolute right-6 w-12 h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors duration-200"
+              >
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </>
+          )}
+          
+          {/* Image counter */}
+          {allImages.length > 1 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 px-4 py-2 rounded-full text-white text-sm">
+              {modalImageIndex + 1} / {allImages.length}
+            </div>
+          )}
+          
           {/* Image */}
           <img
-            src={imageUrl}
-            alt="Screenshot full view"
+            src={allImages[modalImageIndex]}
+            alt={`Screenshot ${modalImageIndex + 1}`}
             className="max-w-full max-h-full object-contain"
             onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}
 
-      {/* Left Panel - Image + Assessment */}
+      {/* Left Panel - Images + Assessment */}
       <div className="w-[45%] p-8 flex flex-col gap-6 overflow-y-auto">
-        {/* New Screenshot Button */}
+        {/* Header */}
         <div className="flex justify-between items-center flex-shrink-0">
           <h1 className="text-2xl font-semibold text-white">Design Feedback</h1>
           <button
             onClick={onNewScreenshot}
             className="px-4 py-2 text-sm font-medium text-[#1a1a1a] bg-white rounded-lg hover:bg-gray-100 transition-colors duration-200"
           >
-            New Screenshot
+            Start Over
           </button>
         </div>
 
-        {/* Image Display - Clickable to open modal */}
-        <div className="flex-shrink-0 cursor-pointer group relative" onClick={() => setIsImageModalOpen(true)}>
-          <img
-            src={imageUrl}
-            alt="Uploaded screenshot"
-            className="w-full h-auto rounded-[5px] transition-opacity duration-200 group-hover:opacity-90"
-          />
-          {/* Hover overlay hint */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/20 rounded-[5px]">
-            <div className="bg-white/90 px-4 py-2 rounded-lg flex items-center gap-2">
-              <svg className="w-5 h-5 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-              </svg>
-              <span className="text-sm font-medium text-gray-900">Click to enlarge</span>
+        {/* Image Gallery */}
+        <div className="flex-shrink-0">
+          {/* Main selected image */}
+          <div 
+            className="cursor-pointer group relative mb-3" 
+            onClick={() => setModalImageIndex(selectedImageIndex)}
+          >
+            <img
+              src={allImages[selectedImageIndex]}
+              alt={`Screenshot ${selectedImageIndex + 1}`}
+              className="w-full h-auto rounded-lg transition-opacity duration-200 group-hover:opacity-90 border border-[#2F3134]"
+            />
+            {/* Image number badge */}
+            {allImages.length > 1 && (
+              <div className="absolute top-3 left-3 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-sm font-bold text-white">
+                {selectedImageIndex + 1}
+              </div>
+            )}
+            {/* Hover overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/20 rounded-lg">
+              <div className="bg-white/90 px-4 py-2 rounded-lg flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                </svg>
+                <span className="text-sm font-medium text-gray-900">Click to enlarge</span>
+              </div>
             </div>
           </div>
+          
+          {/* Thumbnail strip (if multiple images) */}
+          {allImages.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {allImages.map((img, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`relative flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                    selectedImageIndex === index 
+                      ? 'border-blue-500' 
+                      : 'border-[#2F3134] hover:border-gray-500'
+                  }`}
+                >
+                  <img src={img} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+                  <div className="absolute top-1 left-1 w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold text-white">
+                    {index + 1}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Assessment Cards Grid */}
@@ -440,13 +540,35 @@ export default function WorkingState({
 
         {/* Input Area */}
         <div className="px-8 py-6 border-t border-[#2F3134] flex-shrink-0">
+          {/* Hidden file input for adding images */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            onChange={handleAddImage}
+            className="hidden"
+          />
+          
           <div className="flex gap-3">
+            {/* Attach image button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              className="px-3 py-3 bg-[#2a2a2a] border border-[#2F3134] text-gray-400 rounded-lg hover:bg-[#333] hover:text-gray-200 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Add another screenshot"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            
             <input
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask a follow-up question..."
+              placeholder="Ask a follow-up question or add context about new images..."
               disabled={isLoading}
               className="flex-1 bg-[#2a2a2a] border border-[#2F3134] rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent transition-all duration-200 disabled:opacity-50"
             />

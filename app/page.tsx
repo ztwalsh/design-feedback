@@ -8,17 +8,17 @@ type AppState = 'landing' | 'working' | 'analyzing';
 
 export default function Home() {
   const [currentState, setCurrentState] = useState<AppState>('landing');
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [imageContext, setImageContext] = useState<string | undefined>(undefined);
 
-  const handleImageUpload = (dataUrl: string, context?: string) => {
-    setUploadedImage(dataUrl);
+  const handleImageUpload = (images: string[], context?: string) => {
+    setUploadedImages(images);
     setImageContext(context);
     setCurrentState('analyzing');
   };
 
   const handleNewScreenshot = () => {
-    setUploadedImage(null);
+    setUploadedImages([]);
     setImageContext(undefined);
     setCurrentState('landing');
   };
@@ -33,7 +33,7 @@ export default function Home() {
 
   return (
     <WorkingState
-      imageUrl={uploadedImage!}
+      images={uploadedImages}
       context={imageContext}
       isInitialAnalysis={currentState === 'analyzing'}
       onAnalysisComplete={handleAnalysisComplete}

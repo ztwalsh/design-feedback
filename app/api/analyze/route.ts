@@ -41,6 +41,8 @@ Synthesize the above into key strengths, priority improvements, and overall impr
 
 ---
 
+When analyzing MULTIPLE images, reference them by number (Image 1, Image 2, etc.) and note differences, improvements, or compare states as appropriate based on the user's context.
+
 At the end of your INITIAL analysis only, include these exact rating lines:
 \`\`\`
 RATING_OVERALL: [Strong|Good|Fair|Needs Work]
@@ -67,9 +69,14 @@ function detectMediaType(dataUrl: string): 'image/png' | 'image/jpeg' | 'image/w
   return 'image/jpeg';
 }
 
+interface ImageData {
+  base64: string;
+  fullUrl: string;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { imageBase64, fullDataUrl, userContext } = await request.json();
+    const { images, userContext } = await request.json() as { images: ImageData[]; userContext?: string };
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'API key not configured' }), {
@@ -78,12 +85,44 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const mediaType = fullDataUrl ? detectMediaType(fullDataUrl) : 'image/jpeg';
+    // Build content array with all images
+    const contentParts: Anthropic.Messages.ContentBlockParam[] = [];
     
-    let analysisPrompt = 'Please analyze this design screenshot and provide detailed feedback following the structure outlined in your system prompt.';
-    if (userContext) {
-      analysisPrompt = `Context about this design: "${userContext}"\n\nPlease analyze this design screenshot with this context in mind, and provide detailed feedback following the structure outlined in your system prompt.`;
+    images.forEach((img, index) => {
+      const mediaType = detectMediaType(img.fullUrl);
+      contentParts.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mediaType,
+          data: img.base64,
+        },
+      });
+      // Add image label for multiple images
+      if (images.length > 1) {
+        contentParts.push({
+          type: 'text',
+          text: `[Image ${index + 1} above]`,
+        });
+      }
+    });
+    
+    // Build analysis prompt based on number of images and context
+    let analysisPrompt: string;
+    if (images.length === 1) {
+      analysisPrompt = userContext 
+        ? `Context: "${userContext}"\n\nPlease analyze this design screenshot with this context in mind.`
+        : 'Please analyze this design screenshot and provide detailed feedback.';
+    } else {
+      analysisPrompt = userContext
+        ? `Context: "${userContext}"\n\nPlease analyze these ${images.length} design screenshots with this context in mind. Reference each image by number when providing feedback.`
+        : `Please analyze these ${images.length} design screenshots. Reference each image by number when providing feedback, and note any differences or patterns across them.`;
     }
+    
+    contentParts.push({
+      type: 'text',
+      text: analysisPrompt,
+    });
 
     // Create streaming response
     const stream = await anthropic.messages.stream({
@@ -93,20 +132,7 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: imageBase64,
-              },
-            },
-            {
-              type: 'text',
-              text: analysisPrompt,
-            },
-          ],
+          content: contentParts,
         },
       ],
     });
