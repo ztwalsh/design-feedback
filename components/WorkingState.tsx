@@ -25,6 +25,7 @@ interface Assessment {
 
 interface WorkingStateProps {
   imageUrl: string;
+  context?: string;
   isInitialAnalysis: boolean;
   onAnalysisComplete: () => void;
   onNewScreenshot: () => void;
@@ -32,6 +33,7 @@ interface WorkingStateProps {
 
 export default function WorkingState({
   imageUrl,
+  context,
   isInitialAnalysis,
   onAnalysisComplete,
   onNewScreenshot,
@@ -67,9 +69,9 @@ export default function WorkingState({
     const base64Data = imageUrl.split(',')[1];
     imageDataRef.current = { base64: base64Data, fullUrl: imageUrl };
     
-    // Start analysis
-    performInitialAnalysis(base64Data, imageUrl);
-  }, [isInitialAnalysis, imageUrl]);
+    // Start analysis with optional context
+    performInitialAnalysis(base64Data, imageUrl, context);
+  }, [isInitialAnalysis, imageUrl, context]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -139,24 +141,75 @@ export default function WorkingState({
     }
   };
 
-  const performInitialAnalysis = async (base64Data: string, fullDataUrl: string) => {
+  const performInitialAnalysis = async (base64Data: string, fullDataUrl: string, userContext?: string) => {
     setIsLoading(true);
     setIsAnalyzingInitial(true);
     
+    // Start with empty assistant message that we'll stream into
+    setMessages([{ role: 'assistant', content: '' }]);
+    
     try {
-      const feedback = await analyzeDesign(base64Data, fullDataUrl);
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: base64Data,
+          fullDataUrl: fullDataUrl,
+          userContext: userContext,
+        }),
+      });
       
-      // Extract assessment ratings
-      const ratings = extractAssessment(feedback);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
-      // Set ALL state before notifying parent - this ensures atomic update
-      setAssessment(ratings);
-      setMessages([{ role: 'assistant', content: feedback }]);
-      setIsAnalyzingInitial(false);
-      setIsLoading(false);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
       
-      // Only notify parent AFTER all local state is set
-      onAnalysisComplete();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.text) {
+                fullText += data.text;
+                // Update message with streamed content
+                setMessages([{ role: 'assistant', content: fullText }]);
+                
+                // Try to extract ratings as they stream in
+                const ratings = extractAssessment(fullText);
+                if (ratings.overall || ratings.visualDesign || ratings.accessibility) {
+                  setAssessment(ratings);
+                  // Once we have ratings, we can show them (stop loading cards)
+                  if (ratings.overall && ratings.visualDesign && ratings.hierarchy && 
+                      ratings.accessibility && ratings.interaction && ratings.ux && ratings.content) {
+                    setIsAnalyzingInitial(false);
+                  }
+                }
+              }
+              if (data.done) {
+                // Final extraction of ratings
+                const finalRatings = extractAssessment(fullText);
+                setAssessment(finalRatings);
+                setIsAnalyzingInitial(false);
+                setIsLoading(false);
+                onAnalysisComplete();
+              }
+            } catch (e) {
+              // Ignore JSON parse errors for incomplete chunks
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('❌ Error in performInitialAnalysis:', error);
       setMessages([

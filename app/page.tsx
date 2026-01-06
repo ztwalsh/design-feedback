@@ -6,22 +6,20 @@ import WorkingState from '@/components/WorkingState';
 
 type AppState = 'landing' | 'working' | 'analyzing';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 export default function Home() {
   const [currentState, setCurrentState] = useState<AppState>('landing');
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [imageContext, setImageContext] = useState<string | undefined>(undefined);
 
-  const handleImageUpload = (dataUrl: string) => {
+  const handleImageUpload = (dataUrl: string, context?: string) => {
     setUploadedImage(dataUrl);
+    setImageContext(context);
     setCurrentState('analyzing');
   };
 
   const handleNewScreenshot = () => {
     setUploadedImage(null);
+    setImageContext(undefined);
     setCurrentState('landing');
   };
 
@@ -36,6 +34,7 @@ export default function Home() {
   return (
     <WorkingState
       imageUrl={uploadedImage!}
+      context={imageContext}
       isInitialAnalysis={currentState === 'analyzing'}
       onAnalysisComplete={handleAnalysisComplete}
       onNewScreenshot={handleNewScreenshot}

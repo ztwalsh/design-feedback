@@ -1,8 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import Spinner from './Spinner';
 
 type CardType = 'overall' | 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
+
+// Tooltip descriptions for each category
+const categoryTooltips: Record<CardType, string> = {
+  overall: 'Synthesized score across all design dimensions',
+  visual: 'Color, typography, spacing, imagery, and aesthetic coherence',
+  hierarchy: 'Content organization, visual weight, and attention flow',
+  accessibility: 'Contrast, legibility, touch targets, and inclusive design',
+  interaction: 'Interactive elements, affordances, and feedback clarity',
+  ux: 'User flow, cognitive load, and task completion paths',
+  content: 'Copy clarity, tone, microcopy, and content best practices',
+};
 
 interface AssessmentCardProps {
   label: string;
@@ -108,6 +120,8 @@ export default function AssessmentCard({
   onClick,
   isClickable = false,
 }: AssessmentCardProps) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  
   const ratingColors = {
     'Good': 'text-green-400',
     'Strong': 'text-emerald-400',
@@ -115,15 +129,27 @@ export default function AssessmentCard({
     'Needs Work': 'text-red-400',
   };
 
+  const tooltip = categoryTooltips[type];
+
   if (isLarge) {
     return (
-      <div className="bg-[#252525] border border-[#2F3134] rounded-xl p-5 col-span-full">
+      <div 
+        className="bg-[#252525] border border-[#2F3134] rounded-xl p-5 col-span-full relative"
+        onMouseEnter={() => setShowTooltip(true)}
+        onMouseLeave={() => setShowTooltip(false)}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center">
               <TypeIcon type={type} className="w-5 h-5 text-white" />
             </div>
-            <span className="text-sm text-gray-400 font-medium">{label}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-400 font-medium">{label}</span>
+              <svg className="w-3.5 h-3.5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" strokeWidth={2} />
+                <path strokeWidth={2} d="M12 16v-4M12 8h.01" />
+              </svg>
+            </div>
           </div>
           {isLoading ? (
             <Spinner size="md" className="text-gray-500" />
@@ -135,6 +161,12 @@ export default function AssessmentCard({
             <div className="text-2xl font-bold text-gray-600">—</div>
           )}
         </div>
+        {/* Tooltip */}
+        {showTooltip && (
+          <div className="absolute left-0 top-full mt-2 z-10 px-3 py-2 bg-[#1a1a1a] border border-[#2F3134] rounded-lg shadow-lg max-w-xs">
+            <p className="text-xs text-gray-300">{tooltip}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -145,17 +177,23 @@ export default function AssessmentCard({
 
   return (
     <div 
-      className={`bg-[#252525] border border-[#2F3134] rounded-xl p-4 ${clickableStyles}`}
+      className={`bg-[#252525] border border-[#2F3134] rounded-xl p-4 relative ${clickableStyles}`}
       onClick={isClickable && !isLoading ? onClick : undefined}
       role={isClickable ? 'button' : undefined}
       tabIndex={isClickable && !isLoading ? 0 : undefined}
       onKeyDown={isClickable && !isLoading ? (e) => e.key === 'Enter' && onClick?.() : undefined}
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
     >
       <div className="flex items-center gap-2 mb-2">
         <TypeIcon type={type} className={`w-4 h-4 text-gray-500 ${isClickable ? 'group-hover:text-gray-400' : ''}`} />
         <span className={`text-xs text-gray-500 font-medium ${isClickable ? 'group-hover:text-gray-400' : ''}`}>{label}</span>
+        <svg className="w-3 h-3 text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" strokeWidth={2} />
+          <path strokeWidth={2} d="M12 16v-4M12 8h.01" />
+        </svg>
         {isClickable && !isLoading && (
-          <svg className="w-3 h-3 text-gray-600 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-3 h-3 text-gray-600 ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         )}
@@ -170,6 +208,13 @@ export default function AssessmentCard({
         </div>
       ) : (
         <div className="text-lg font-semibold text-gray-600">—</div>
+      )}
+      {/* Tooltip */}
+      {showTooltip && (
+        <div className="absolute left-0 top-full mt-2 z-10 px-3 py-2 bg-[#1a1a1a] border border-[#2F3134] rounded-lg shadow-lg max-w-[200px]">
+          <p className="text-xs text-gray-300">{tooltip}</p>
+          {isClickable && <p className="text-xs text-gray-500 mt-1">Click for deep dive</p>}
+        </div>
       )}
     </div>
   );

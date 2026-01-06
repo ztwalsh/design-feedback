@@ -79,7 +79,7 @@ function detectMediaType(dataUrl: string): 'image/png' | 'image/jpeg' | 'image/w
 /**
  * Analyze a design screenshot and provide initial comprehensive feedback
  */
-export async function analyzeDesign(imageBase64: string, fullDataUrl?: string): Promise<string> {
+export async function analyzeDesign(imageBase64: string, fullDataUrl?: string, userContext?: string): Promise<string> {
   try {
     // Check API key
     if (!apiKey || apiKey === 'your_api_key_here') {
@@ -93,6 +93,15 @@ export async function analyzeDesign(imageBase64: string, fullDataUrl?: string): 
     console.log('📸 Analyzing design...');
     console.log('   Media type:', mediaType);
     console.log('   Image size:', imageBase64.length, 'characters');
+    if (userContext) {
+      console.log('   Context:', userContext);
+    }
+
+    // Build the analysis prompt with optional context
+    let analysisPrompt = 'Please analyze this design screenshot and provide detailed feedback following the structure outlined in your system prompt.';
+    if (userContext) {
+      analysisPrompt = `Context about this design: "${userContext}"\n\nPlease analyze this design screenshot with this context in mind, and provide detailed feedback following the structure outlined in your system prompt.`;
+    }
 
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-20250514',
@@ -111,7 +120,7 @@ export async function analyzeDesign(imageBase64: string, fullDataUrl?: string): 
             },
             {
               type: 'text',
-              text: 'Please analyze this design screenshot and provide detailed feedback following the structure outlined in your system prompt.',
+              text: analysisPrompt,
             },
           ],
         },
