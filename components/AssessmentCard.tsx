@@ -24,6 +24,7 @@ interface AssessmentCardProps {
   isLarge?: boolean;
   onClick?: () => void;
   isClickable?: boolean;
+  isDisabled?: boolean;
 }
 
 // SVG icons matching the Design Assistant style (stroke-based)
@@ -119,8 +120,18 @@ export default function AssessmentCard({
   isLarge = false,
   onClick,
   isClickable = false,
+  isDisabled = false,
 }: AssessmentCardProps) {
   const [showTooltip, setShowTooltip] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePos({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  };
   
   const ratingColors = {
     'Good': 'text-green-400',
@@ -130,6 +141,22 @@ export default function AssessmentCard({
   };
 
   const tooltip = categoryTooltips[type];
+  
+  // Disabled state styling
+  if (isDisabled) {
+    return (
+      <div 
+        className="bg-[#1f1f1f] border border-[#252525] rounded-xl p-4 opacity-40"
+        title="This dimension was not included in the analysis"
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <TypeIcon type={type} className="w-4 h-4 text-gray-600" />
+          <span className="text-xs text-gray-600 font-medium">{label}</span>
+        </div>
+        <div className="text-lg font-semibold text-gray-600">– –</div>
+      </div>
+    );
+  }
 
   if (isLarge) {
     return (
@@ -137,6 +164,7 @@ export default function AssessmentCard({
         className="bg-[#252525] border border-[#2F3134] rounded-xl p-5 col-span-full relative"
         onMouseEnter={() => setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
+        onMouseMove={handleMouseMove}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -161,12 +189,16 @@ export default function AssessmentCard({
             <div className="text-2xl font-bold text-gray-600">—</div>
           )}
         </div>
-        {/* Tooltip */}
-        {showTooltip && (
-          <div className="absolute left-0 top-full mt-2 z-10 px-3 py-2 bg-[#1a1a1a] border border-[#2F3134] rounded-lg shadow-lg max-w-xs">
-            <p className="text-xs text-gray-300">{tooltip}</p>
-          </div>
-        )}
+        {/* Tooltip - follows cursor with fade */}
+        <div 
+          className={`absolute z-20 px-3 py-2 bg-[#1a1a1a] border border-[#2F3134] rounded-lg shadow-lg max-w-xs pointer-events-none transition-opacity duration-150 ${showTooltip ? 'opacity-100' : 'opacity-0'}`}
+          style={{ 
+            left: mousePos.x + 12, 
+            top: mousePos.y + 12,
+          }}
+        >
+          <p className="text-xs text-gray-300">{tooltip}</p>
+        </div>
       </div>
     );
   }
@@ -184,6 +216,7 @@ export default function AssessmentCard({
       onKeyDown={isClickable && !isLoading ? (e) => e.key === 'Enter' && onClick?.() : undefined}
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
+      onMouseMove={handleMouseMove}
     >
       <div className="flex items-center gap-2 mb-2">
         <TypeIcon type={type} className={`w-4 h-4 text-gray-500 ${isClickable ? 'group-hover:text-gray-400' : ''}`} />
@@ -209,13 +242,17 @@ export default function AssessmentCard({
       ) : (
         <div className="text-lg font-semibold text-gray-600">—</div>
       )}
-      {/* Tooltip */}
-      {showTooltip && (
-        <div className="absolute left-0 top-full mt-2 z-10 px-3 py-2 bg-[#1a1a1a] border border-[#2F3134] rounded-lg shadow-lg max-w-[200px]">
-          <p className="text-xs text-gray-300">{tooltip}</p>
-          {isClickable && <p className="text-xs text-gray-500 mt-1">Click for deep dive</p>}
-        </div>
-      )}
+      {/* Tooltip - follows cursor with fade */}
+      <div 
+        className={`absolute z-20 px-3 py-2 bg-[#1a1a1a] border border-[#2F3134] rounded-lg shadow-lg max-w-[200px] pointer-events-none transition-opacity duration-150 ${showTooltip ? 'opacity-100' : 'opacity-0'}`}
+        style={{ 
+          left: mousePos.x + 12, 
+          top: mousePos.y + 12,
+        }}
+      >
+        <p className="text-xs text-gray-300">{tooltip}</p>
+        {isClickable && <p className="text-xs text-gray-500 mt-1">Click for deep dive</p>}
+      </div>
     </div>
   );
 }

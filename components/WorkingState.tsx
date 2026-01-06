@@ -23,9 +23,12 @@ interface Assessment {
   content: Rating;
 }
 
+type DimensionKey = 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
+
 interface WorkingStateProps {
   images: string[];
   context?: string;
+  enabledDimensions: DimensionKey[];
   isInitialAnalysis: boolean;
   onAnalysisComplete: () => void;
   onNewScreenshot: () => void;
@@ -34,6 +37,7 @@ interface WorkingStateProps {
 export default function WorkingState({
   images: initialImages,
   context,
+  enabledDimensions,
   isInitialAnalysis,
   onAnalysisComplete,
   onNewScreenshot,
@@ -78,8 +82,8 @@ export default function WorkingState({
     imageDataRef.current = imageData;
     
     // Start analysis with all images
-    performInitialAnalysis(imageData, context);
-  }, [isInitialAnalysis, allImages, context]);
+    performInitialAnalysis(imageData, context, enabledDimensions);
+  }, [isInitialAnalysis, allImages, context, enabledDimensions]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -177,7 +181,11 @@ export default function WorkingState({
     }
   };
 
-  const performInitialAnalysis = async (imageData: Array<{ base64: string; fullUrl: string }>, userContext?: string) => {
+  const performInitialAnalysis = async (
+    imageData: Array<{ base64: string; fullUrl: string }>, 
+    userContext?: string,
+    dimensions?: DimensionKey[]
+  ) => {
     setIsLoading(true);
     setIsAnalyzingInitial(true);
     
@@ -191,6 +199,7 @@ export default function WorkingState({
         body: JSON.stringify({
           images: imageData,
           userContext: userContext,
+          enabledDimensions: dimensions,
         }),
       });
       
@@ -368,7 +377,7 @@ export default function WorkingState({
       )}
 
       {/* Left Panel - Images + Assessment */}
-      <div className="w-[45%] p-8 flex flex-col gap-6 overflow-y-auto">
+      <div className="w-[45%] p-8 flex flex-col gap-6 overflow-y-auto elegant-scroll">
         {/* Header */}
         <div className="flex justify-between items-center flex-shrink-0">
           <h1 className="text-2xl font-semibold text-white">Design Feedback</h1>
@@ -449,48 +458,54 @@ export default function WorkingState({
               label="Visual Design" 
               rating={assessment.visualDesign} 
               type="visual"
-              isLoading={isAnalyzingInitial}
-              isClickable={!isAnalyzingInitial && !isLoading}
+              isLoading={isAnalyzingInitial && enabledDimensions.includes('visual')}
+              isClickable={!isAnalyzingInitial && !isLoading && enabledDimensions.includes('visual')}
+              isDisabled={!enabledDimensions.includes('visual')}
               onClick={() => handleCategoryDeepDive('visual', 'Visual Design')}
             />
             <AssessmentCard 
               label="Hierarchy" 
               rating={assessment.hierarchy} 
               type="hierarchy"
-              isLoading={isAnalyzingInitial}
-              isClickable={!isAnalyzingInitial && !isLoading}
+              isLoading={isAnalyzingInitial && enabledDimensions.includes('hierarchy')}
+              isClickable={!isAnalyzingInitial && !isLoading && enabledDimensions.includes('hierarchy')}
+              isDisabled={!enabledDimensions.includes('hierarchy')}
               onClick={() => handleCategoryDeepDive('hierarchy', 'Information Hierarchy')}
             />
             <AssessmentCard 
               label="Accessibility" 
               rating={assessment.accessibility} 
               type="accessibility"
-              isLoading={isAnalyzingInitial}
-              isClickable={!isAnalyzingInitial && !isLoading}
+              isLoading={isAnalyzingInitial && enabledDimensions.includes('accessibility')}
+              isClickable={!isAnalyzingInitial && !isLoading && enabledDimensions.includes('accessibility')}
+              isDisabled={!enabledDimensions.includes('accessibility')}
               onClick={() => handleCategoryDeepDive('accessibility', 'Accessibility')}
             />
             <AssessmentCard 
               label="Interaction" 
               rating={assessment.interaction} 
               type="interaction"
-              isLoading={isAnalyzingInitial}
-              isClickable={!isAnalyzingInitial && !isLoading}
+              isLoading={isAnalyzingInitial && enabledDimensions.includes('interaction')}
+              isClickable={!isAnalyzingInitial && !isLoading && enabledDimensions.includes('interaction')}
+              isDisabled={!enabledDimensions.includes('interaction')}
               onClick={() => handleCategoryDeepDive('interaction', 'Interaction Design')}
             />
             <AssessmentCard 
               label="UX Efficacy" 
               rating={assessment.ux} 
               type="ux"
-              isLoading={isAnalyzingInitial}
-              isClickable={!isAnalyzingInitial && !isLoading}
+              isLoading={isAnalyzingInitial && enabledDimensions.includes('ux')}
+              isClickable={!isAnalyzingInitial && !isLoading && enabledDimensions.includes('ux')}
+              isDisabled={!enabledDimensions.includes('ux')}
               onClick={() => handleCategoryDeepDive('ux', 'UX Efficacy')}
             />
             <AssessmentCard 
               label="Content" 
               rating={assessment.content} 
               type="content"
-              isLoading={isAnalyzingInitial}
-              isClickable={!isAnalyzingInitial && !isLoading}
+              isLoading={isAnalyzingInitial && enabledDimensions.includes('content')}
+              isClickable={!isAnalyzingInitial && !isLoading && enabledDimensions.includes('content')}
+              isDisabled={!enabledDimensions.includes('content')}
               onClick={() => handleCategoryDeepDive('content', 'Content')}
             />
           </div>

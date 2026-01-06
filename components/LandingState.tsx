@@ -5,13 +5,80 @@ import { useDropzone } from 'react-dropzone';
 
 const MAX_IMAGES = 4;
 
+// Feedback dimensions that can be toggled
+export type DimensionKey = 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
+
+export interface DimensionConfig {
+  key: DimensionKey;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const DIMENSIONS: DimensionConfig[] = [
+  { 
+    key: 'visual', 
+    label: 'Visual', 
+    description: 'Color, typography, spacing',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><circle cx="13.5" cy="6.5" r="2.5" /><circle cx="6" cy="12" r="2" /><circle cx="18" cy="12" r="2" /><circle cx="8" cy="18" r="2" /><circle cx="16" cy="18" r="2" /></svg>
+  },
+  { 
+    key: 'hierarchy', 
+    label: 'Hierarchy', 
+    description: 'Content organization',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M9 21V9" /></svg>
+  },
+  { 
+    key: 'accessibility', 
+    label: 'A11y', 
+    description: 'Contrast, legibility',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><circle cx="12" cy="4" r="2" /><path d="M12 6v6" /><path d="M8 8l4 2 4-2" /><path d="M8 20l4-8 4 8" /></svg>
+  },
+  { 
+    key: 'interaction', 
+    label: 'Interaction', 
+    description: 'Affordances, CTAs',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M4 4l7.07 17 2.51-7.39L21 11.07z" /><path d="M15 15l6 6" /></svg>
+  },
+  { 
+    key: 'ux', 
+    label: 'UX', 
+    description: 'Flow, cognitive load',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M12 2a4 4 0 0 1 4 4v1a3 3 0 0 1 3 3 3 3 0 0 1-1.2 2.4" /><path d="M16 21v-4a2 2 0 0 0-4 0v4" /><path d="M8 21v-4a2 2 0 0 1 4 0" /><path d="M6.2 12.4A3 3 0 0 1 5 10a3 3 0 0 1 3-3V6a4 4 0 0 1 4-4" /><path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" /></svg>
+  },
+  { 
+    key: 'content', 
+    label: 'Content', 
+    description: 'Copy, microcopy, tone',
+    icon: <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+  },
+];
+
 interface LandingStateProps {
-  onImageUpload: (images: string[], context?: string) => void;
+  onImageUpload: (images: string[], context?: string, enabledDimensions?: DimensionKey[]) => void;
 }
 
 export default function LandingState({ onImageUpload }: LandingStateProps) {
   const [context, setContext] = useState('');
   const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [enabledDimensions, setEnabledDimensions] = useState<Set<DimensionKey>>(
+    new Set(DIMENSIONS.map(d => d.key))
+  );
+  
+  const toggleDimension = (key: DimensionKey) => {
+    setEnabledDimensions(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        // Don't allow disabling all dimensions
+        if (next.size > 1) {
+          next.delete(key);
+        }
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
   
   const onDrop = useCallback((acceptedFiles: File[]) => {
     // Limit to MAX_IMAGES total
@@ -32,7 +99,11 @@ export default function LandingState({ onImageUpload }: LandingStateProps) {
   
   const handleSubmit = () => {
     if (previewImages.length > 0) {
-      onImageUpload(previewImages, context.trim() || undefined);
+      onImageUpload(
+        previewImages, 
+        context.trim() || undefined,
+        Array.from(enabledDimensions)
+      );
     }
   };
   
@@ -40,10 +111,6 @@ export default function LandingState({ onImageUpload }: LandingStateProps) {
     setPreviewImages((prev) => prev.filter((_, i) => i !== index));
   };
   
-  const handleClearAll = () => {
-    setPreviewImages([]);
-  };
-
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
@@ -103,33 +170,19 @@ export default function LandingState({ onImageUpload }: LandingStateProps) {
                   </div>
                 ))}
                 
-                {/* Add more images slot */}
+                {/* Add more images slot - compact */}
                 {previewImages.length < MAX_IMAGES && (
                   <button
                     onClick={(e) => { e.stopPropagation(); open(); }}
-                    className="flex flex-col items-center justify-center min-h-[150px] border-2 border-dashed border-[#2F3134] rounded-lg hover:border-gray-500 hover:bg-[#252525] transition-all duration-200"
+                    className="flex flex-col items-center justify-center min-h-[80px] border-2 border-dashed border-[#2F3134] rounded-lg hover:border-gray-500 hover:bg-[#252525] transition-all duration-200"
                   >
-                    <svg className="w-8 h-8 text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                     </svg>
-                    <span className="text-sm text-gray-500">Add more</span>
-                    <span className="text-xs text-gray-600 mt-1">{previewImages.length}/{MAX_IMAGES}</span>
+                    <span className="text-xs text-gray-500">{previewImages.length}/{MAX_IMAGES}</span>
                   </button>
                 )}
               </div>
-            </div>
-            
-            {/* Action buttons row */}
-            <div className="flex justify-between items-center">
-              <button
-                onClick={handleClearAll}
-                className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                Clear all
-              </button>
-              <span className="text-sm text-gray-600">
-                {previewImages.length} image{previewImages.length !== 1 ? 's' : ''} selected
-              </span>
             </div>
             
             {/* Context Input */}
@@ -148,12 +201,28 @@ export default function LandingState({ onImageUpload }: LandingStateProps) {
                 className="w-full bg-[#252525] border border-[#2F3134] rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all duration-200 resize-none"
                 rows={2}
               />
-              <p className="mt-1.5 text-xs text-gray-600">
-                {previewImages.length > 1 
-                  ? "Describe what these images represent (states, versions, comparison, etc.)"
-                  : "Adding context helps the AI give more relevant feedback"
-                }
-              </p>
+              
+              {/* Feedback Dimensions - compact attachment-style tags */}
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {DIMENSIONS.map((dim) => {
+                  const isEnabled = enabledDimensions.has(dim.key);
+                  return (
+                    <button
+                      key={dim.key}
+                      onClick={() => toggleDimension(dim.key)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs transition-all duration-200 ${
+                        isEnabled
+                          ? 'bg-blue-600/20 text-blue-300 hover:bg-blue-600/30'
+                          : 'bg-[#252525] text-gray-500 hover:text-gray-400'
+                      }`}
+                      title={dim.description}
+                    >
+                      <span className={`flex-shrink-0 [&>svg]:w-3 [&>svg]:h-3 ${isEnabled ? 'text-blue-400' : 'text-gray-600'}`}>{dim.icon}</span>
+                      <span>{dim.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             
             {/* Submit Button */}

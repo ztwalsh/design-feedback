@@ -17,25 +17,61 @@
   
   body {
     @apply bg-[#1a1a1a] text-gray-100 antialiased;
-    background: 
   }
 
-  /* Custom scrollbar for chat */
+  /* Elegant minimal scrollbar - hidden by default, appears on hover */
+  .elegant-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  
+  .elegant-scroll:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+
+  .elegant-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .elegant-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .elegant-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+    transition: background 0.2s ease;
+  }
+
+  .elegant-scroll:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .elegant-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  /* Chat scroll - slightly more visible */
+  .chat-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
   .chat-scroll::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
 
   .chat-scroll::-webkit-scrollbar-track {
-    background: var(--color-bg-secondary);
+    background: transparent;
   }
 
   .chat-scroll::-webkit-scrollbar-thumb {
-    background: var(--color-bg-tertiary);
-    @apply rounded-full;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
   }
 
   .chat-scroll::-webkit-scrollbar-thumb:hover {
-    background: var(--color-hover-bg);
+    background: rgba(255, 255, 255, 0.2);
   }
 }
 
