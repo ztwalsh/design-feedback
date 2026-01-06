@@ -14,13 +14,19 @@ export interface KnowledgeFile {
 const PRIORITY_FILES = [
   // Core content design principles
   'content-design/fundamentals/content-principles.md',
+  'content-design/fundamentals/active-voice.md',
+  'content-design/fundamentals/reading-level.md',
   'content-design/accessibility.md',
   'content-design/choosing-tone.md',
-  // Key interface guidelines
+  // Key interface content guidelines
   'content-design/interface-content-elements/error-messages.md',
   'content-design/interface-content-elements/empty-states.md',
+  'content-design/interface-content-elements/input-fields.md',
+  'content-design/interface-content-elements/placeholder-text.md',
+  'content-design/interface-content-elements/confirmation-messages.md',
   // Grammar essentials
   'content-design/grammar/casing-and-capitalization.md',
+  'content-design/grammar/punctuation.md',
 ];
 
 /**

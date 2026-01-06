@@ -2,7 +2,7 @@
 
 import Spinner from './Spinner';
 
-type CardType = 'overall' | 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux';
+type CardType = 'overall' | 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
 
 interface AssessmentCardProps {
   label: string;
@@ -84,6 +84,14 @@ const TypeIcon = ({ type, className = "w-4 h-4" }: { type: CardType; className?:
           <path d="M8 21v-4a2 2 0 0 1 4 0" />
           <path d="M6.2 12.4A3 3 0 0 1 5 10a3 3 0 0 1 3-3V6a4 4 0 0 1 4-4" />
           <path d="M12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+        </svg>
+      );
+    case 'content':
+      // Pencil/edit icon for content/writing
+      return (
+        <svg {...iconProps}>
+          <path d="M12 20h9" />
+          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
         </svg>
       );
     default:

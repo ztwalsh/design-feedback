@@ -20,6 +20,7 @@ interface Assessment {
   accessibility: Rating;
   interaction: Rating;
   ux: Rating;
+  content: Rating;
 }
 
 interface WorkingStateProps {
@@ -47,6 +48,7 @@ export default function WorkingState({
     accessibility: null,
     interaction: null,
     ux: null,
+    content: null,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStartedAnalysis = useRef(false);
@@ -94,6 +96,7 @@ export default function WorkingState({
       accessibility: parseRating('ACCESSIBILITY'),
       interaction: parseRating('INTERACTION'),
       ux: parseRating('UX'),
+      content: parseRating('CONTENT'),
     };
   };
 
@@ -104,6 +107,7 @@ export default function WorkingState({
     accessibility: "Give me a detailed deep-dive on the **Accessibility** of this screenshot. Focus on: color contrast ratios, text legibility and sizing, touch/click target sizes, keyboard navigation considerations, screen reader compatibility concerns, cognitive load and clarity. What accessibility issues do you see and how should they be fixed?",
     interaction: "Give me a detailed deep-dive on the **Interaction Design** of this screenshot. Focus on: clarity of interactive elements, button and link affordances, hover/focus state expectations, feedback mechanisms, form design if applicable, call-to-action effectiveness. What's working well and what could be clearer for users?",
     ux: "Give me a detailed deep-dive on the **UX Efficacy** of this screenshot. Focus on: user flow clarity, cognitive load and mental effort required, task completion paths, error prevention, user confidence and trust signals, overall usability. What friction points exist and how could the experience be smoother?",
+    content: "Give me a detailed deep-dive on the **Content** of this screenshot, referencing the content guidelines in the knowledge base. Focus on: clarity and conciseness of copy, tone and voice consistency, microcopy effectiveness (buttons, labels, placeholders), error message quality, use of active voice, reading level appropriateness, grammar and punctuation, casing and capitalization conventions. What content is working well and what specific copy improvements would you recommend based on content design best practices?",
   };
 
   const handleCategoryDeepDive = async (category: string, label: string) => {
@@ -327,6 +331,14 @@ export default function WorkingState({
               isLoading={isAnalyzingInitial}
               isClickable={!isAnalyzingInitial && !isLoading}
               onClick={() => handleCategoryDeepDive('ux', 'UX Efficacy')}
+            />
+            <AssessmentCard 
+              label="Content" 
+              rating={assessment.content} 
+              type="content"
+              isLoading={isAnalyzingInitial}
+              isClickable={!isAnalyzingInitial && !isLoading}
+              onClick={() => handleCategoryDeepDive('content', 'Content')}
             />
           </div>
         </div>

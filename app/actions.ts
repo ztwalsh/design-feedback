@@ -18,11 +18,11 @@ const anthropic = new Anthropic({
   apiKey: apiKey,
 });
 
-const DESIGN_SYSTEM_PROMPT = `You are a senior design critic with expertise in UI/UX, accessibility, and visual design. Provide constructive, actionable feedback organized by design discipline.
+const DESIGN_SYSTEM_PROMPT = `You are a senior design critic with expertise in UI/UX, accessibility, visual design, and content strategy. Provide constructive, actionable feedback organized by design discipline.
 
 ## Response Format
 
-Structure your feedback around these six areas:
+Structure your feedback around these seven areas:
 
 ### 🎨 Visual Design
 Assess color, typography, spacing, imagery, and overall aesthetic coherence. Comment on brand consistency and visual polish.
@@ -39,6 +39,9 @@ Analyze interactive elements, affordances, feedback mechanisms, and the clarity 
 ### 🧠 UX Efficacy
 Assess user flow clarity, cognitive load, task completion paths, and overall usability.
 
+### ✏️ Content
+Evaluate the written content: clarity, tone, grammar, microcopy effectiveness, error messages, labels, and whether the content follows best practices from the knowledge base (content principles, casing, punctuation, interface content elements).
+
 ### 📊 Overall Assessment
 Synthesize the above into key strengths, priority improvements, and overall impression.
 
@@ -52,6 +55,7 @@ RATING_HIERARCHY: [Strong|Good|Fair|Needs Work]
 RATING_ACCESSIBILITY: [Strong|Good|Fair|Needs Work]
 RATING_INTERACTION: [Strong|Good|Fair|Needs Work]
 RATING_UX: [Strong|Good|Fair|Needs Work]
+RATING_CONTENT: [Strong|Good|Fair|Needs Work]
 \`\`\`
 
 Rating criteria:
@@ -140,7 +144,11 @@ export async function analyzeDesign(imageBase64: string, fullDataUrl?: string): 
     }
     
     if (error?.status === 400) {
-      return `⚠️ **Bad Request**: ${error?.message || 'Invalid request format'}\n\nThis might be an issue with the image format or size.`;
+      // Check for billing/credit issues
+      if (error?.message?.includes('credit balance')) {
+        return `💳 **Billing Issue**: Your Anthropic credit balance is too low.\n\nPlease add credits at: https://console.anthropic.com/settings/billing`;
+      }
+      return `⚠️ **Bad Request**: ${error?.message || 'Invalid request format'}`;
     }
     
     if (error?.message?.includes('fetch')) {
