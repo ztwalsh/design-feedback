@@ -34,33 +34,43 @@ const PRIORITY_FILES = [
  */
 const MAX_TOTAL_CHARS = 15000;
 
+// Cache for knowledge files to avoid repeated file system reads
+let cachedKnowledge: KnowledgeFile[] | null = null;
+
 /**
  * Load only essential knowledge files to keep context efficient
+ * Results are cached after first load for performance
  */
 export function loadKnowledge(): KnowledgeFile[] {
+  // Return cached results if available
+  if (cachedKnowledge !== null) {
+    return cachedKnowledge;
+  }
+
   const knowledgeDir = path.join(process.cwd(), 'knowledge');
   const files: KnowledgeFile[] = [];
   let totalChars = 0;
 
   if (!fs.existsSync(knowledgeDir)) {
     console.warn('⚠️ Knowledge directory not found');
+    cachedKnowledge = files;
     return files;
   }
 
   // First, load priority files
   for (const relativePath of PRIORITY_FILES) {
     const fullPath = path.join(knowledgeDir, relativePath);
-    
+
     if (fs.existsSync(fullPath)) {
       try {
         const content = fs.readFileSync(fullPath, 'utf8');
-        
+
         // Check if we'd exceed the limit
         if (totalChars + content.length > MAX_TOTAL_CHARS) {
           console.log(`⏹️ Stopping at ${files.length} files (char limit)`);
           break;
         }
-        
+
         files.push({
           filename: path.basename(relativePath),
           content,
@@ -75,35 +85,49 @@ export function loadKnowledge(): KnowledgeFile[] {
   }
 
   // Also load any .md files in the root knowledge directory
-  const rootEntries = fs.readdirSync(knowledgeDir, { withFileTypes: true });
-  for (const entry of rootEntries) {
-    if (entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'README.md') {
-      const fullPath = path.join(knowledgeDir, entry.name);
-      try {
-        const content = fs.readFileSync(fullPath, 'utf8');
-        
-        if (totalChars + content.length > MAX_TOTAL_CHARS) {
-          break;
+  try {
+    const rootEntries = fs.readdirSync(knowledgeDir, { withFileTypes: true });
+    for (const entry of rootEntries) {
+      if (entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'README.md') {
+        const fullPath = path.join(knowledgeDir, entry.name);
+        try {
+          const content = fs.readFileSync(fullPath, 'utf8');
+
+          if (totalChars + content.length > MAX_TOTAL_CHARS) {
+            break;
+          }
+
+          // Skip if already loaded via priority
+          if (!files.some(f => f.path === entry.name)) {
+            files.push({
+              filename: entry.name,
+              content,
+              path: entry.name,
+            });
+            totalChars += content.length;
+            console.log(`📄 Loaded (root): ${entry.name}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error reading ${fullPath}:`, error);
         }
-        
-        // Skip if already loaded via priority
-        if (!files.some(f => f.path === entry.name)) {
-          files.push({
-            filename: entry.name,
-            content,
-            path: entry.name,
-          });
-          totalChars += content.length;
-          console.log(`📄 Loaded (root): ${entry.name}`);
-        }
-      } catch (error) {
-        console.error(`❌ Error reading ${fullPath}:`, error);
       }
     }
+  } catch (error) {
+    console.error('❌ Error reading knowledge directory:', error);
   }
 
   console.log(`✅ Loaded ${files.length} knowledge file(s) (~${Math.round(totalChars/1000)}k chars)`);
+
+  // Cache the results
+  cachedKnowledge = files;
   return files;
+}
+
+/**
+ * Clear the knowledge cache (useful for testing or hot-reloading)
+ */
+export function clearKnowledgeCache(): void {
+  cachedKnowledge = null;
 }
 
 /**

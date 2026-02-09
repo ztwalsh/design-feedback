@@ -1,29 +1,22 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import ChatMessage from './ChatMessage';
 import AssessmentCard from './AssessmentCard';
 import Spinner from './Spinner';
 import { analyzeDesign, askFollowUpQuestion } from '@/app/actions';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-type Rating = 'Good' | 'Strong' | 'Fair' | 'Needs Work' | null;
-
-interface Assessment {
-  overall: Rating;
-  visualDesign: Rating;
-  hierarchy: Rating;
-  accessibility: Rating;
-  interaction: Rating;
-  ux: Rating;
-  content: Rating;
-}
-
-type DimensionKey = 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
+import { extractBase64 } from '@/lib/utils';
+import type { Message, Rating, Assessment, DimensionKey, ImageData } from '@/lib/types';
+import {
+  trackAnalysisStart,
+  trackAnalysisComplete,
+  trackDeepDive,
+  trackFollowUpQuestion,
+  trackExplainRequest,
+  trackAddImageDuringSession,
+  trackStartOver,
+  trackImageView,
+} from '@/lib/analytics';
 
 interface WorkingStateProps {
   images: string[];
@@ -33,6 +26,16 @@ interface WorkingStateProps {
   onAnalysisComplete: () => void;
   onNewScreenshot: () => void;
 }
+
+// Deep dive prompts - moved outside component to prevent recreation
+const CATEGORY_PROMPTS: Record<string, string> = {
+  visual: "Give me a detailed deep-dive on the **Visual Design** of this screenshot. Focus on: color choices and palette harmony, typography selection and hierarchy, spacing and whitespace usage, imagery and iconography, overall aesthetic coherence and brand consistency. What's working well and what specific improvements would elevate the visual design?",
+  hierarchy: "Give me a detailed deep-dive on the **Information Hierarchy** of this screenshot. Focus on: content organization and structure, visual weight distribution, F-pattern or Z-pattern scanning flow, how the design guides user attention, clarity of primary vs secondary content. What's working well and what could be reorganized for better scannability?",
+  accessibility: "Give me a detailed deep-dive on the **Accessibility** of this screenshot. Focus on: color contrast ratios, text legibility and sizing, touch/click target sizes, keyboard navigation considerations, screen reader compatibility concerns, cognitive load and clarity. What accessibility issues do you see and how should they be fixed?",
+  interaction: "Give me a detailed deep-dive on the **Interaction Design** of this screenshot. Focus on: clarity of interactive elements, button and link affordances, hover/focus state expectations, feedback mechanisms, form design if applicable, call-to-action effectiveness. What's working well and what could be clearer for users?",
+  ux: "Give me a detailed deep-dive on the **UX Efficacy** of this screenshot. Focus on: user flow clarity, cognitive load and mental effort required, task completion paths, error prevention, user confidence and trust signals, overall usability. What friction points exist and how could the experience be smoother?",
+  content: "Give me a detailed deep-dive on the **Content** of this screenshot, referencing the content guidelines in the knowledge base. Focus on: clarity and conciseness of copy, tone and voice consistency, microcopy effectiveness (buttons, labels, placeholders), error message quality, use of active voice, reading level appropriateness, grammar and punctuation, casing and capitalization conventions. What content is working well and what specific copy improvements would you recommend based on content design best practices?",
+};
 
 export default function WorkingState({
   images: initialImages,
@@ -61,29 +64,36 @@ export default function WorkingState({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasStartedAnalysis = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Store processed image data for API calls
-  const imageDataRef = useRef<Array<{ base64: string; fullUrl: string }>>([]);
 
-  // Single effect: extract base64 and perform initial analysis
+  // Store processed image data for API calls
+  const imageDataRef = useRef<ImageData[]>([]);
+
+  // Memoize image data extraction
+  const imageData = useMemo(() =>
+    allImages.map(img => ({
+      base64: extractBase64(img),
+      fullUrl: img,
+    })),
+    [allImages]
+  );
+
+  // Update ref when imageData changes
   useEffect(() => {
-    if (!isInitialAnalysis || hasStartedAnalysis.current || allImages.length === 0) {
+    imageDataRef.current = imageData;
+  }, [imageData]);
+
+  // Single effect: perform initial analysis
+  useEffect(() => {
+    if (!isInitialAnalysis || hasStartedAnalysis.current || imageData.length === 0) {
       return;
     }
-    
+
     // Mark as started to prevent double-runs
     hasStartedAnalysis.current = true;
-    
-    // Extract and store base64 for all images
-    const imageData = allImages.map(img => ({
-      base64: img.split(',')[1],
-      fullUrl: img,
-    }));
-    imageDataRef.current = imageData;
-    
+
     // Start analysis with all images
     performInitialAnalysis(imageData, context, enabledDimensions);
-  }, [isInitialAnalysis, allImages, context, enabledDimensions]);
+  }, [isInitialAnalysis, imageData, context, enabledDimensions]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -91,9 +101,10 @@ export default function WorkingState({
   }, [messages]);
 
   // Extract assessment from feedback text using explicit rating markers
-  const extractAssessment = (feedback: string): Assessment => {
+  // Optimized to compile regex once
+  const extractAssessment = useCallback((feedback: string): Assessment => {
     const validRatings = ['Strong', 'Good', 'Fair', 'Needs Work'] as const;
-    
+
     const parseRating = (key: string): Rating => {
       const regex = new RegExp(`RATING_${key}:\\s*(Strong|Good|Fair|Needs Work)`, 'i');
       const match = feedback.match(regex);
@@ -102,7 +113,7 @@ export default function WorkingState({
       }
       return null;
     };
-    
+
     return {
       overall: parseRating('OVERALL'),
       visualDesign: parseRating('VISUAL_DESIGN'),
@@ -112,27 +123,20 @@ export default function WorkingState({
       ux: parseRating('UX'),
       content: parseRating('CONTENT'),
     };
-  };
+  }, []);
 
-  // Deep dive prompts for each category
-  const categoryPrompts: Record<string, string> = {
-    visual: "Give me a detailed deep-dive on the **Visual Design** of this screenshot. Focus on: color choices and palette harmony, typography selection and hierarchy, spacing and whitespace usage, imagery and iconography, overall aesthetic coherence and brand consistency. What's working well and what specific improvements would elevate the visual design?",
-    hierarchy: "Give me a detailed deep-dive on the **Information Hierarchy** of this screenshot. Focus on: content organization and structure, visual weight distribution, F-pattern or Z-pattern scanning flow, how the design guides user attention, clarity of primary vs secondary content. What's working well and what could be reorganized for better scannability?",
-    accessibility: "Give me a detailed deep-dive on the **Accessibility** of this screenshot. Focus on: color contrast ratios, text legibility and sizing, touch/click target sizes, keyboard navigation considerations, screen reader compatibility concerns, cognitive load and clarity. What accessibility issues do you see and how should they be fixed?",
-    interaction: "Give me a detailed deep-dive on the **Interaction Design** of this screenshot. Focus on: clarity of interactive elements, button and link affordances, hover/focus state expectations, feedback mechanisms, form design if applicable, call-to-action effectiveness. What's working well and what could be clearer for users?",
-    ux: "Give me a detailed deep-dive on the **UX Efficacy** of this screenshot. Focus on: user flow clarity, cognitive load and mental effort required, task completion paths, error prevention, user confidence and trust signals, overall usability. What friction points exist and how could the experience be smoother?",
-    content: "Give me a detailed deep-dive on the **Content** of this screenshot, referencing the content guidelines in the knowledge base. Focus on: clarity and conciseness of copy, tone and voice consistency, microcopy effectiveness (buttons, labels, placeholders), error message quality, use of active voice, reading level appropriateness, grammar and punctuation, casing and capitalization conventions. What content is working well and what specific copy improvements would you recommend based on content design best practices?",
-  };
+  const handleCategoryDeepDive = useCallback(async (category: string, label: string) => {
+    if (isLoading || !CATEGORY_PROMPTS[category]) return;
 
-  const handleCategoryDeepDive = async (category: string, label: string) => {
-    if (isLoading || !categoryPrompts[category]) return;
-    
-    const prompt = categoryPrompts[category];
-    
+    const prompt = CATEGORY_PROMPTS[category];
+
+    // Track deep dive request
+    trackDeepDive(category);
+
     // Add the question to messages
     setMessages((prev) => [...prev, { role: 'user', content: `Deep dive: ${label}` }]);
     setIsLoading(true);
-    
+
     try {
       // Use first image for follow-ups (or could use all)
       const primaryImage = imageDataRef.current[0];
@@ -142,53 +146,55 @@ export default function WorkingState({
         messages,
         prompt
       );
-      
+
       setMessages((prev) => [...prev, { role: 'assistant', content: response }]);
     } catch (error) {
       console.error('Error getting deep dive:', error);
-      setMessages((prev) => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, there was an error getting the detailed analysis. Please try again.' 
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, there was an error getting the detailed analysis. Please try again.'
       }]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isLoading, messages]);
   
   // Handle adding new images during conversation
-  const handleAddImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAddImage = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
+
+    // Track adding images during session
+    trackAddImageDuringSession();
+
     Array.from(files).forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
         const dataUrl = reader.result as string;
-        const newImageData = {
-          base64: dataUrl.split(',')[1],
-          fullUrl: dataUrl,
-        };
-        
         setAllImages((prev) => [...prev, dataUrl]);
-        imageDataRef.current = [...imageDataRef.current, newImageData];
       };
       reader.readAsDataURL(file);
     });
-    
+
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, []);
 
-  const performInitialAnalysis = async (
-    imageData: Array<{ base64: string; fullUrl: string }>, 
+  const performInitialAnalysis = useCallback(async (
+    imageData: ImageData[],
     userContext?: string,
     dimensions?: DimensionKey[]
   ) => {
+    const startTime = Date.now();
+
+    // Track analysis start
+    trackAnalysisStart(imageData.length, dimensions || []);
+
     setIsLoading(true);
     setIsAnalyzingInitial(true);
-    
+
     // Start with empty assistant message that we'll stream into
     setMessages([{ role: 'assistant', content: '' }]);
     
@@ -246,6 +252,11 @@ export default function WorkingState({
                 setAssessment(finalRatings);
                 setIsAnalyzingInitial(false);
                 setIsLoading(false);
+
+                // Track analysis complete
+                const duration = Date.now() - startTime;
+                trackAnalysisComplete(imageData.length, duration, finalRatings.overall || undefined);
+
                 onAnalysisComplete();
               }
             } catch (e) {
@@ -266,18 +277,22 @@ export default function WorkingState({
       setIsLoading(false);
       onAnalysisComplete();
     }
-  };
+  }, [extractAssessment, onAnalysisComplete]);
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = useCallback(async () => {
     if (!inputValue.trim() || isLoading) return;
+
+    const question = inputValue.trim();
+
+    // Track follow-up question
+    trackFollowUpQuestion(question.length);
 
     const userMessage: Message = {
       role: 'user',
-      content: inputValue.trim(),
+      content: question,
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    const question = inputValue.trim();
     setInputValue('');
     setIsLoading(true);
 
@@ -309,14 +324,50 @@ export default function WorkingState({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [inputValue, isLoading, messages]);
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
-  };
+  }, [handleSendMessage]);
+
+  // Handle "Explain" request for selected text
+  const handleExplain = useCallback(async (selectedText: string) => {
+    if (isLoading) return;
+
+    // Track explain request
+    trackExplainRequest(selectedText.length);
+
+    const prompt = `Please explain this point in more detail: "${selectedText}"
+
+Go deeper on why this matters, what specifically to look for, and concrete suggestions for how to address it.`;
+
+    // Add the question to messages
+    setMessages((prev) => [...prev, { role: 'user', content: `Explain: "${selectedText}"` }]);
+    setIsLoading(true);
+    
+    try {
+      const primaryImage = imageDataRef.current[0];
+      const response = await askFollowUpQuestion(
+        primaryImage.base64,
+        primaryImage.fullUrl,
+        messages,
+        prompt
+      );
+      
+      setMessages((prev) => [...prev, { role: 'assistant', content: response }]);
+    } catch (error) {
+      console.error('Error getting explanation:', error);
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, there was an error getting the explanation. Please try again.'
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoading, messages]);
 
   return (
     <div className="h-screen bg-[#1a1a1a] flex overflow-hidden">
@@ -382,7 +433,10 @@ export default function WorkingState({
         <div className="flex justify-between items-center flex-shrink-0">
           <h1 className="text-2xl font-semibold text-white">Design Feedback</h1>
           <button
-            onClick={onNewScreenshot}
+            onClick={() => {
+              trackStartOver();
+              onNewScreenshot();
+            }}
             className="px-4 py-2 text-sm font-medium text-[#1a1a1a] bg-white rounded-lg hover:bg-gray-100 transition-colors duration-200"
           >
             Start Over
@@ -392,9 +446,12 @@ export default function WorkingState({
         {/* Image Gallery */}
         <div className="flex-shrink-0">
           {/* Main selected image */}
-          <div 
-            className="cursor-pointer group relative mb-3" 
-            onClick={() => setModalImageIndex(selectedImageIndex)}
+          <div
+            className="cursor-pointer group relative mb-3"
+            onClick={() => {
+              trackImageView(selectedImageIndex);
+              setModalImageIndex(selectedImageIndex);
+            }}
           >
             <img
               src={allImages[selectedImageIndex]}
@@ -541,6 +598,7 @@ export default function WorkingState({
               key={index}
               role={message.role}
               content={message.content}
+              onExplain={message.role === 'assistant' && !isLoading ? handleExplain : undefined}
             />
           ))}
           {isLoading && (

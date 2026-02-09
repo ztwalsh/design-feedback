@@ -1,104 +1,9 @@
 import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { loadKnowledge, formatKnowledgeForPrompt } from '@/lib/knowledge';
-
-const apiKey = process.env.ANTHROPIC_API_KEY;
-
-const anthropic = new Anthropic({
-  apiKey: apiKey,
-});
-
-// Load knowledge files once
-const knowledgeFiles = loadKnowledge();
-const knowledgeContext = formatKnowledgeForPrompt(knowledgeFiles);
-
-type DimensionKey = 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
-
-const DIMENSION_PROMPTS: Record<DimensionKey, { section: string; rating: string }> = {
-  visual: {
-    section: `### 🎨 Visual Design
-Assess color, typography, spacing, imagery, and overall aesthetic coherence. Comment on brand consistency and visual polish.`,
-    rating: 'RATING_VISUAL_DESIGN: [Strong|Good|Fair|Needs Work]',
-  },
-  hierarchy: {
-    section: `### 📐 Information Hierarchy
-Evaluate content organization, visual weight distribution, scanning patterns, and how effectively the design guides attention.`,
-    rating: 'RATING_HIERARCHY: [Strong|Good|Fair|Needs Work]',
-  },
-  accessibility: {
-    section: `### ♿ Accessibility
-Check color contrast, text legibility, touch targets, keyboard navigation considerations, and inclusive design practices.`,
-    rating: 'RATING_ACCESSIBILITY: [Strong|Good|Fair|Needs Work]',
-  },
-  interaction: {
-    section: `### 🖱️ Interaction Design
-Analyze interactive elements, affordances, feedback mechanisms, and the clarity of actionable components.`,
-    rating: 'RATING_INTERACTION: [Strong|Good|Fair|Needs Work]',
-  },
-  ux: {
-    section: `### 🧠 UX Efficacy
-Assess user flow clarity, cognitive load, task completion paths, and overall usability.`,
-    rating: 'RATING_UX: [Strong|Good|Fair|Needs Work]',
-  },
-  content: {
-    section: `### ✏️ Content
-Evaluate the written content: clarity, tone, grammar, microcopy effectiveness, error messages, labels, and whether the content follows best practices from the knowledge base (content principles, casing, punctuation, interface content elements).`,
-    rating: 'RATING_CONTENT: [Strong|Good|Fair|Needs Work]',
-  },
-};
-
-function buildSystemPrompt(enabledDimensions: DimensionKey[]): string {
-  const dimensionSections = enabledDimensions
-    .map(d => DIMENSION_PROMPTS[d].section)
-    .join('\n\n');
-  
-  const dimensionRatings = enabledDimensions
-    .map(d => DIMENSION_PROMPTS[d].rating)
-    .join('\n');
-
-  return `You are a senior design critic with expertise in UI/UX, accessibility, visual design, and content strategy. Provide constructive, actionable feedback organized by design discipline.
-
-## Response Format
-
-Structure your feedback around these areas:
-
-${dimensionSections}
-
-### 📊 Overall Assessment
-Synthesize the above into key strengths, priority improvements, and overall impression.
-
----
-
-When analyzing MULTIPLE images, reference them by number (Image 1, Image 2, etc.) and note differences, improvements, or compare states as appropriate based on the user's context.
-
-At the end of your INITIAL analysis only, include these exact rating lines:
-\`\`\`
-RATING_OVERALL: [Strong|Good|Fair|Needs Work]
-${dimensionRatings}
-\`\`\`
-
-Rating criteria:
-- **Strong**: Exceptional, follows best practices, polished
-- **Good**: Solid work with minor improvements needed
-- **Fair**: Acceptable but has notable issues
-- **Needs Work**: Significant improvements required
-
-Be direct, specific, and actionable. Skip generic advice.${knowledgeContext}`
-}
-
-function detectMediaType(dataUrl: string): 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' {
-  if (dataUrl.startsWith('data:image/png')) return 'image/png';
-  if (dataUrl.startsWith('data:image/webp')) return 'image/webp';
-  if (dataUrl.startsWith('data:image/gif')) return 'image/gif';
-  return 'image/jpeg';
-}
-
-interface ImageData {
-  base64: string;
-  fullUrl: string;
-}
-
-const ALL_DIMENSIONS: DimensionKey[] = ['visual', 'hierarchy', 'accessibility', 'interaction', 'ux', 'content'];
+import { buildSystemPrompt, ALL_DIMENSIONS } from '@/lib/prompts';
+import { anthropic, isApiKeyValid, DEFAULT_MODEL, MAX_TOKENS_ANALYSIS } from '@/lib/anthropic-client';
+import { detectMediaType } from '@/lib/utils';
+import type { DimensionKey, ImageData } from '@/lib/types';
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,7 +18,7 @@ export async function POST(request: NextRequest) {
       ? enabledDimensions 
       : ALL_DIMENSIONS;
 
-    if (!apiKey) {
+    if (!isApiKeyValid()) {
       return new Response(JSON.stringify({ error: 'API key not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -163,8 +68,8 @@ export async function POST(request: NextRequest) {
     const systemPrompt = buildSystemPrompt(dimensions);
     
     const stream = await anthropic.messages.stream({
-      model: 'claude-opus-4-20250514',
-      max_tokens: 4096,
+      model: DEFAULT_MODEL,
+      max_tokens: MAX_TOKENS_ANALYSIS,
       system: systemPrompt,
       messages: [
         {

@@ -2,11 +2,10 @@
 
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import type { DimensionKey } from '@/lib/types';
+import { trackImageUpload, trackDimensionToggle } from '@/lib/analytics';
 
 const MAX_IMAGES = 4;
-
-// Feedback dimensions that can be toggled
-export type DimensionKey = 'visual' | 'hierarchy' | 'accessibility' | 'interaction' | 'ux' | 'content';
 
 export interface DimensionConfig {
   key: DimensionKey;
@@ -68,13 +67,17 @@ export default function LandingState({ onImageUpload }: LandingStateProps) {
   const toggleDimension = (key: DimensionKey) => {
     setEnabledDimensions(prev => {
       const next = new Set(prev);
+      const willBeEnabled = !next.has(key);
+
       if (next.has(key)) {
         // Don't allow disabling all dimensions
         if (next.size > 1) {
           next.delete(key);
+          trackDimensionToggle(key, false);
         }
       } else {
         next.add(key);
+        trackDimensionToggle(key, true);
       }
       return next;
     });
@@ -99,8 +102,11 @@ export default function LandingState({ onImageUpload }: LandingStateProps) {
   
   const handleSubmit = () => {
     if (previewImages.length > 0) {
+      // Track image upload
+      trackImageUpload(previewImages.length, !!context.trim());
+
       onImageUpload(
-        previewImages, 
+        previewImages,
         context.trim() || undefined,
         Array.from(enabledDimensions)
       );

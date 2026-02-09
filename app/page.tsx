@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import LandingState, { DimensionKey } from '@/components/LandingState';
+import LandingState from '@/components/LandingState';
 import WorkingState from '@/components/WorkingState';
+import type { DimensionKey } from '@/lib/types';
 
 type AppState = 'landing' | 'working' | 'analyzing';
 
