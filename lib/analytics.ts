@@ -188,6 +188,16 @@ export function trackApiError(status: number, endpoint: string): void {
 }
 
 /**
+ * Track when user requests a human review via Slack
+ */
+export function trackReviewRequest(reviewerHandle: string): void {
+  trackEvent('review_request', {
+    reviewer_handle: reviewerHandle,
+    category: 'engagement',
+  });
+}
+
+/**
  * Track dimension toggle
  */
 export function trackDimensionToggle(
